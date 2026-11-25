@@ -1,0 +1,710 @@
+openapi: 3.0.3
+info:
+  title: CapShopp API
+  version: 1.0.0
+  description: |
+    Documentacao REST do backend didatico CapShopp, baseada nos controllers,
+    DTOs e services disponiveis e nos retornos observados em testes no Bruno.
+    Login didatico: a resposta informa o perfil, mas nao cria sessao nem token.
+    Os endpoints nao possuem controle de acesso HTTP autenticado.
+    IDs, estoque e datas apresentados em exemplos sao ilustrativos.
+servers:
+  - url: http://localhost:8080
+    description: Backend local
+
+tags:
+  - name: Autenticacao
+    description: Login didatico
+  - name: Usuarios
+    description: CRUD de usuarios
+  - name: Administracao
+    description: Indicadores administrativos
+  - name: Catalogo
+    description: Consulta publica dos produtos ativos
+  - name: Produtos
+    description: CRUD e desativacao de produtos
+  - name: Compras
+    description: Confirmacao de compra
+  - name: Pedidos
+    description: Consulta e alteracao de status dos pedidos
+
+paths:
+  /api/auth/login:
+    post:
+      tags: [Autenticacao]
+      summary: Realizar login didatico
+      description: Verifica email e senha e retorna os dados e perfil da conta. Nao emite token nem cria sessao autenticada.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+            example:
+              email: cliente1@teste.com
+              senha: '12345'
+      responses:
+        '200':
+          description: Credenciais validas.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContaResponse'
+              example:
+                id: 4
+                nome: Cliente 1
+                email: cliente1@teste.com
+                perfil: CLIENTE
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/usuarios:
+    get:
+      tags: [Usuarios]
+      summary: Listar usuarios
+      responses:
+        '200':
+          description: Lista de contas sem campo senha.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ContaResponse'
+              example:
+                - id: 1
+                  nome: Administrador CapShopp
+                  email: admin@teste.com
+                  perfil: ADMIN
+                - id: 4
+                  nome: Cliente 1
+                  email: cliente1@teste.com
+                  perfil: CLIENTE
+    post:
+      tags: [Usuarios]
+      summary: Cadastrar usuario
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UsuarioRequest'
+            example:
+              nome: Cliente Teste
+              email: cliente.teste@teste.com
+              senha: '12345'
+              perfil: CLIENTE
+      responses:
+        '201':
+          description: Usuario cadastrado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContaResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /api/usuarios/{id}:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    get:
+      tags: [Usuarios]
+      summary: Consultar usuario por ID
+      responses:
+        '200':
+          description: Usuario encontrado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContaResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags: [Usuarios]
+      summary: Atualizar usuario
+      description: Envie nome, email, senha e perfil; todos sao validados no service.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UsuarioRequest'
+            example:
+              nome: Cliente Teste Atualizado
+              email: cliente.teste@teste.com
+              senha: '12345'
+              perfil: CLIENTE
+      responses:
+        '200':
+          description: Usuario atualizado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContaResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+    delete:
+      tags: [Usuarios]
+      summary: Excluir usuario
+      description: A exclusao e bloqueada quando a conta possui produtos ou pedidos associados.
+      responses:
+        '204':
+          description: Usuario excluido, sem corpo na resposta.
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /api/admin/dashboard:
+    get:
+      tags: [Administracao]
+      summary: Consultar indicadores administrativos
+      description: Retorna totais de lojas, clientes, produtos e contas, alem de listas de lojas e clientes. Na versao didatica atual, nao ha controle HTTP de perfil.
+      responses:
+        '200':
+          description: Indicadores do sistema.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DashboardResponse'
+
+  /api/catalogo:
+    get:
+      tags: [Catalogo]
+      summary: Listar ou pesquisar produtos ativos
+      description: Busca por trecho do nome, ignorando maiusculas e minusculas. O estoque zero nao deve impedir a listagem de produtos ativos.
+      parameters:
+        - name: nome
+          in: query
+          required: false
+          description: Texto parcial do nome; omitido ou vazio retorna os produtos ativos.
+          schema:
+            type: string
+            default: ''
+          example: Cami
+      responses:
+        '200':
+          description: Lista de produtos correspondentes, ou lista vazia se nao houver resultados.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ProdutoResponse'
+              example:
+                - id: 1
+                  lojistaId: 2
+                  nome: Camiseta
+                  descricao: Camiseta de exemplo
+                  preco: 59.90
+                  estoque: 12
+                  imagem: https://example.com/camiseta.jpg
+                  ativo: true
+
+  /api/produtos:
+    get:
+      tags: [Produtos]
+      summary: Listar produtos de um lojista
+      parameters:
+        - name: lojistaId
+          in: query
+          required: true
+          schema:
+            type: integer
+            format: int64
+          example: 2
+      responses:
+        '200':
+          description: Lista de produtos do lojista, inclusive desativados.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ProdutoResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+    post:
+      tags: [Produtos]
+      summary: Cadastrar produto
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProdutoRequest'
+            example:
+              lojistaId: 2
+              nome: Fone de Ouvido
+              descricao: Fone de ouvido com fio
+              preco: 49.90
+              estoque: 20
+              imagem: https://example.com/fone.jpg
+      responses:
+        '201':
+          description: Produto cadastrado com ID gerado e ativo igual a true.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProdutoResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/produtos/{id}:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    get:
+      tags: [Produtos]
+      summary: Consultar produto por ID
+      description: Pode retornar um produto inativo.
+      responses:
+        '200':
+          description: Produto encontrado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProdutoResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags: [Produtos]
+      summary: Atualizar produto
+      description: Envie lojistaId e os demais campos do produto. O service exige que lojistaId corresponda ao dono atual do produto.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProdutoRequest'
+            example:
+              lojistaId: 2
+              nome: Fone de Ouvido Premium
+              descricao: Fone com microfone
+              preco: 79.90
+              estoque: 30
+              imagem: https://example.com/fone-premium.jpg
+      responses:
+        '200':
+          description: Produto atualizado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProdutoResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [Produtos]
+      summary: Excluir produto
+      description: Produtos vinculados a itens de pedidos nao podem ser excluidos; desative-os em vez disso.
+      responses:
+        '204':
+          description: Produto excluido, sem corpo na resposta.
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /api/produtos/{id}/desativar:
+    patch:
+      tags: [Produtos]
+      summary: Desativar produto
+      description: Altera ativo para false sem excluir o produto do banco.
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Produto atualizado com ativo igual a false.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProdutoResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/compras:
+    post:
+      tags: [Compras]
+      summary: Confirmar compra
+      description: |
+        Recebe clienteId e itens. Se houver produtos de lojas distintas, cria um pedido
+        PENDENTE por lojista. Desconta estoque na confirmacao. Falhas de validacao
+        cancelam a transacao, sem pedidos parciais no cenario verificado.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PedidoRequest'
+            example:
+              clienteId: 4
+              itens:
+                - produtoId: 1
+                  quantidade: 1
+                - produtoId: 3
+                  quantidade: 1
+      responses:
+        '201':
+          description: Lista de pedidos gerados, um por loja envolvida.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PedidoResponse'
+              example:
+                - id: 3
+                  clienteId: 4
+                  lojistaId: 2
+                  criadoEm: '2026-11-22T22:03:50.975521Z'
+                  total: 59.90
+                  status: PENDENTE
+                  itens:
+                    - produtoId: 1
+                      nomeProduto: Camiseta
+                      quantidade: 1
+                      precoUnitario: 59.90
+                - id: 4
+                  clienteId: 4
+                  lojistaId: 3
+                  criadoEm: '2026-11-22T22:03:50.977519Z'
+                  total: 79.90
+                  status: PENDENTE
+                  itens:
+                    - produtoId: 3
+                      nomeProduto: Mouse
+                      quantidade: 1
+                      precoUnitario: 79.90
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /api/pedidos:
+    get:
+      tags: [Pedidos]
+      summary: Listar pedidos
+      description: |
+        Com clienteId, filtra os pedidos do cliente. Sem clienteId e com lojistaId,
+        filtra os pedidos da loja. Sem filtros, retorna todos. Quando ambos sao
+        informados, a implementacao atual prioriza clienteId; nao combina os filtros.
+      parameters:
+        - name: clienteId
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
+          example: 4
+        - name: lojistaId
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
+          example: 2
+      responses:
+        '200':
+          description: Lista de pedidos, com itens e dados de cada pedido.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PedidoResponse'
+
+  /api/pedidos/{id}:
+    get:
+      tags: [Pedidos]
+      summary: Consultar pedido por ID
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Pedido encontrado com itens.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PedidoResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/pedidos/{id}/concluir:
+    patch:
+      tags: [Pedidos]
+      summary: Concluir pedido pendente
+      description: Apenas pedidos no status PENDENTE podem passar para CONCLUIDO. Nao altera o estoque.
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Pedido atualizado com status CONCLUIDO.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PedidoResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /api/pedidos/{id}/cancelar:
+    patch:
+      tags: [Pedidos]
+      summary: Cancelar pedido pendente
+      description: Apenas pedidos PENDENTE podem ser cancelados. Devolve ao estoque as unidades do pedido uma unica vez.
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Pedido atualizado com status CANCELADO.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PedidoResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+components:
+  parameters:
+    Id:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+        minimum: 1
+      description: ID do recurso.
+  responses:
+    BadRequest:
+      description: Dados obrigatorios ausentes ou invalidos (HTTP 400).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Unauthorized:
+      description: Credenciais de login invalidas (HTTP 401).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFound:
+      description: Recurso nao encontrado (HTTP 404).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Conflict:
+      description: Operacao bloqueada por regra de negocio (HTTP 409).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+  schemas:
+    LoginRequest:
+      type: object
+      required: [email, senha]
+      properties:
+        email:
+          type: string
+          example: cliente1@teste.com
+        senha:
+          type: string
+          format: password
+          example: '12345'
+    UsuarioRequest:
+      type: object
+      required: [nome, email, senha, perfil]
+      properties:
+        nome:
+          type: string
+        email:
+          type: string
+        senha:
+          type: string
+          format: password
+        perfil:
+          $ref: '#/components/schemas/PerfilUsuario'
+    ContaResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        nome:
+          type: string
+        email:
+          type: string
+        perfil:
+          $ref: '#/components/schemas/PerfilUsuario'
+    DashboardResponse:
+      type: object
+      properties:
+        lojas:
+          type: integer
+          format: int32
+        clientes:
+          type: integer
+          format: int32
+        produtos:
+          type: integer
+          format: int64
+        contas:
+          type: integer
+          format: int64
+        listaLojas:
+          type: array
+          items:
+            $ref: '#/components/schemas/ContaResponse'
+        listaClientes:
+          type: array
+          items:
+            $ref: '#/components/schemas/ContaResponse'
+    ProdutoRequest:
+      type: object
+      description: O service valida lojistaId, nome, preco maior ou igual a zero e estoque maior ou igual a zero.
+      required: [lojistaId, nome, preco, estoque]
+      properties:
+        lojistaId:
+          type: integer
+          format: int64
+        nome:
+          type: string
+          minLength: 1
+        descricao:
+          type: string
+          nullable: true
+        preco:
+          type: number
+          minimum: 0
+          description: Valor monetario recebido como BigDecimal no Java.
+        estoque:
+          type: integer
+          minimum: 0
+        imagem:
+          type: string
+          nullable: true
+          description: Texto da URL de imagem; a versao atual nao possui endpoint de upload.
+    ProdutoResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        lojistaId:
+          type: integer
+          format: int64
+        nome:
+          type: string
+        descricao:
+          type: string
+          nullable: true
+        preco:
+          type: number
+        estoque:
+          type: integer
+        imagem:
+          type: string
+          nullable: true
+        ativo:
+          type: boolean
+    ItemCompraRequest:
+      type: object
+      required: [produtoId, quantidade]
+      properties:
+        produtoId:
+          type: integer
+          format: int64
+        quantidade:
+          type: integer
+          minimum: 1
+    PedidoRequest:
+      type: object
+      required: [clienteId, itens]
+      properties:
+        clienteId:
+          type: integer
+          format: int64
+        itens:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/ItemCompraRequest'
+    ItemPedidoResponse:
+      type: object
+      properties:
+        produtoId:
+          type: integer
+          format: int64
+        nomeProduto:
+          type: string
+        quantidade:
+          type: integer
+        precoUnitario:
+          type: number
+    PedidoResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        clienteId:
+          type: integer
+          format: int64
+        lojistaId:
+          type: integer
+          format: int64
+        criadoEm:
+          type: string
+          format: date-time
+        total:
+          type: number
+        status:
+          $ref: '#/components/schemas/StatusPedido'
+        itens:
+          type: array
+          items:
+            $ref: '#/components/schemas/ItemPedidoResponse'
+    PerfilUsuario:
+      type: string
+      enum: [ADMIN, LOJISTA, CLIENTE]
+    StatusPedido:
+      type: string
+      enum: [PENDENTE, CONCLUIDO, CANCELADO]
+    ErrorResponse:
+      type: object
+      description: |
+        Campos de erro observados nas respostas padrao do Spring Boot.
+        O backend pode incluir trace quando essa opcao estiver habilitada.
+        Mensagens de regra de negocio foram observadas no trace dos testes;
+        o campo message nao e garantido na configuracao atual.
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+        status:
+          type: integer
+        error:
+          type: string
+        message:
+          type: string
+        path:
+          type: string
+        trace:
+          type: string

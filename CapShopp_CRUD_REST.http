@@ -1,0 +1,317 @@
+# ============================================================
+# CAPSHOPP | REQUISICOES DA API | REST CLIENT (VS CODE)
+# ============================================================
+# Baseado nos controllers e retornos observados nos testes do Bruno.
+# Extensao recomendada: REST Client (VS Code).
+# Execute individualmente pelo link "Send Request" acima de cada metodo.
+# Respostas de exemplo estao comentadas com # e NAO sao executadas.
+# O banco H2 em memoria pode reiniciar; IDs e estoques podem mudar.
+# IMPORTANTE: login didatico, sem token ou autorizacao HTTP real.
+# ============================================================
+
+@baseUrl = http://localhost:8080/api
+@clienteId = 4
+@lojistaId = 2
+@produtoId = 1
+@pedidoId = 1
+
+# Utilize um ID de produto criado especificamente para testes ao
+# executar PUT, PATCH ou DELETE. Substitua o 0 pelo ID retornado no POST.
+@produtoTesteId = 0
+
+
+### ==========================================================
+### MODULO 1 | LOGIN
+### ==========================================================
+
+### 01. Login de usuario
+# Descricao: valida email e senha e retorna os dados do usuario e seu perfil.
+# Metodo e URL: POST {{baseUrl}}/auth/login
+# Retorno observado para este usuario: HTTP 200 OK
+# {
+#   "id": 4,
+#   "nome": "Cliente 1",
+#   "email": "cliente1@teste.com",
+#   "perfil": "CLIENTE"
+# }
+# Retornos de erro observados: HTTP 401 Unauthorized para credenciais invalidas.
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "cliente1@teste.com",
+  "senha": "12345"
+}
+
+
+### ==========================================================
+### MODULO 2 | CATALOGO E PRODUTOS
+### ==========================================================
+
+### 02. Listar catalogo de produtos ativos
+# Descricao: lista produtos ativos, sem filtro de nome.
+# Metodo e URL: GET {{baseUrl}}/catalogo
+# Exemplo observado: HTTP 200 OK; array de ProdutoResponse.
+# [
+#   {"id":1,"lojistaId":2,"nome":"Camiseta","descricao":"Camiseta de exemplo","preco":59.90,"estoque":12,"imagem":"https://example.com/camiseta.jpg","ativo":true},
+#   {"id":2,"lojistaId":2,"nome":"Mochila","descricao":"Mochila de exemplo","preco":129.90,"estoque":7,"imagem":"https://example.com/mochila.jpg","ativo":true},
+#   {"id":3,"lojistaId":3,"nome":"Mouse","descricao":"Mouse de exemplo","preco":79.90,"estoque":9,"imagem":"https://example.com/mouse.jpg","ativo":true},
+#   {"id":4,"lojistaId":3,"nome":"Teclado","descricao":"Teclado de exemplo","preco":149.90,"estoque":5,"imagem":"https://example.com/teclado.jpg","ativo":true},
+#   {"id":6,"lojistaId":2,"nome":"Produto Sem Estoque","descricao":"Produto para testar estoque zerado","preco":25.90,"estoque":0,"imagem":"https://example.com/sem-estoque.jpg","ativo":true}
+# ]
+# Observacao: durante os testes, houve uma consulta sem filtro que nao exibiu
+# o produto 6, enquanto a consulta com ?nome= o exibiu. Causa nao confirmada.
+GET {{baseUrl}}/catalogo
+
+
+### 03. Pesquisar catalogo por nome
+# Descricao: busca parcial e sem diferenciar maiusculas/minusculas.
+# Metodo e URL: GET {{baseUrl}}/catalogo?nome=Mouse
+# Exemplo observado: HTTP 200 OK
+# [
+#   {"id":3,"lojistaId":3,"nome":"Mouse","descricao":"Mouse de exemplo","preco":79.90,"estoque":9,"imagem":"https://example.com/mouse.jpg","ativo":true}
+# ]
+# Sem correspondencia: HTTP 200 OK com [].
+GET {{baseUrl}}/catalogo?nome=Mouse
+
+
+### 04. Listar produtos de um lojista (READ)
+# Descricao: lista produtos pertencentes ao lojista informado.
+# Metodo e URL: GET {{baseUrl}}/produtos?lojistaId={{lojistaId}}
+# Exemplo observado: HTTP 200 OK
+# [
+#   {"id":1,"lojistaId":2,"nome":"Camiseta","descricao":"Camiseta de exemplo","preco":59.90,"estoque":12,"imagem":"https://example.com/camiseta.jpg","ativo":true},
+#   {"id":2,"lojistaId":2,"nome":"Mochila","descricao":"Mochila de exemplo","preco":129.90,"estoque":7,"imagem":"https://example.com/mochila.jpg","ativo":true}
+# ]
+GET {{baseUrl}}/produtos?lojistaId={{lojistaId}}
+
+
+### 05. Consultar produto por ID (READ)
+# Descricao: recupera um produto especifico, inclusive se estiver inativo.
+# Metodo e URL: GET {{baseUrl}}/produtos/{{produtoId}}
+# Exemplo observado: HTTP 200 OK
+# {"id":1,"lojistaId":2,"nome":"Camiseta","descricao":"Camiseta de exemplo","preco":59.90,"estoque":12,"imagem":"https://example.com/camiseta.jpg","ativo":true}
+# ID inexistente: HTTP 404 Not Found, "Produto nao encontrado".
+GET {{baseUrl}}/produtos/{{produtoId}}
+
+
+### 06. Cadastrar produto (CREATE)
+# Descricao: cria novo produto para o lojista indicado.
+# Metodo e URL: POST {{baseUrl}}/produtos
+# Exemplo de retorno: HTTP 201 Created
+# {
+#   "id": 7,
+#   "lojistaId": 2,
+#   "nome": "Suporte para Notebook",
+#   "descricao": "Suporte ajustavel",
+#   "preco": 89.90,
+#   "estoque": 5,
+#   "imagem": "https://example.com/suporte.jpg",
+#   "ativo": true
+# }
+# O ID 7 acima e ILUSTRATIVO: use o ID real retornado na sua execucao.
+# Erros observados: HTTP 400 Bad Request para preco ou estoque negativos.
+POST {{baseUrl}}/produtos
+Content-Type: application/json
+
+{
+  "lojistaId": 2,
+  "nome": "Suporte para Notebook",
+  "descricao": "Suporte ajustavel",
+  "preco": 89.90,
+  "estoque": 5,
+  "imagem": "https://example.com/suporte.jpg"
+}
+
+
+### 07. Atualizar produto (UPDATE)
+# Descricao: substitui os dados editaveis de um produto existente.
+# ANTES: altere @produtoTesteId para o ID criado no passo 06.
+# Metodo e URL: PUT {{baseUrl}}/produtos/{{produtoTesteId}}
+# Exemplo de retorno: HTTP 200 OK, objeto atualizado com o mesmo ID.
+# {
+#   "id": 7,
+#   "lojistaId": 2,
+#   "nome": "Suporte para Notebook Premium",
+#   "descricao": "Suporte ajustavel de aluminio",
+#   "preco": 99.90,
+#   "estoque": 8,
+#   "imagem": "https://example.com/suporte-premium.jpg",
+#   "ativo": true
+# }
+# O ID e ilustrativo e depende da criacao anterior.
+PUT {{baseUrl}}/produtos/{{produtoTesteId}}
+Content-Type: application/json
+
+{
+  "lojistaId": 2,
+  "nome": "Suporte para Notebook Premium",
+  "descricao": "Suporte ajustavel de aluminio",
+  "preco": 99.90,
+  "estoque": 8,
+  "imagem": "https://example.com/suporte-premium.jpg"
+}
+
+
+### 08. Desativar produto (UPDATE parcial)
+# Descricao: marca o produto como inativo, sem exclui-lo do banco.
+# ANTES: altere @produtoTesteId para um ID de teste.
+# Metodo e URL: PATCH {{baseUrl}}/produtos/{{produtoTesteId}}/desativar
+# Exemplo de retorno: HTTP 200 OK; objeto ProdutoResponse com "ativo": false.
+# {"id":7,"lojistaId":2,"nome":"Suporte para Notebook Premium","descricao":"Suporte ajustavel de aluminio","preco":99.90,"estoque":8,"imagem":"https://example.com/suporte-premium.jpg","ativo":false}
+PATCH {{baseUrl}}/produtos/{{produtoTesteId}}/desativar
+
+
+### 09. Excluir produto (DELETE)
+# Descricao: remove produto que nao esta vinculado a pedidos.
+# CUIDADO: remocao permanente no banco atual. Use somente produto de teste.
+# ANTES: altere @produtoTesteId para um ID nao utilizado em pedidos.
+# Metodo e URL: DELETE {{baseUrl}}/produtos/{{produtoTesteId}}
+# Retorno observado quando permitido: HTTP 204 No Content, corpo vazio.
+# Se o produto estiver vinculado a pedidos: HTTP 409 Conflict,
+# "Produto usado em pedidos: desative em vez de excluir".
+# Se nao existir: HTTP 404 Not Found, "Produto nao encontrado".
+DELETE {{baseUrl}}/produtos/{{produtoTesteId}}
+
+
+### ==========================================================
+### MODULO 3 | COMPRAS E PEDIDOS
+### ==========================================================
+
+### 10. Criar compra (CREATE)
+# Descricao: registra itens do cliente; produtos de lojistas diferentes
+# podem gerar pedidos separados, um por loja.
+# Metodo e URL: POST {{baseUrl}}/compras
+# Exemplo observado: HTTP 201 Created; array de PedidoResponse.
+# [
+#   {
+#     "id": 3,
+#     "clienteId": 4,
+#     "lojistaId": 2,
+#     "criadoEm": "2026-11-22T22:03:50.975521300Z",
+#     "total": 59.90,
+#     "status": "PENDENTE",
+#     "itens": [{"produtoId":1,"nomeProduto":"Camiseta","quantidade":1,"precoUnitario":59.90}]
+#   },
+#   {
+#     "id": 4,
+#     "clienteId": 4,
+#     "lojistaId": 3,
+#     "criadoEm": "2026-11-22T22:03:50.977519400Z",
+#     "total": 79.90,
+#     "status": "PENDENTE",
+#     "itens": [{"produtoId":3,"nomeProduto":"Mouse","quantidade":1,"precoUnitario":79.90}]
+#   }
+# ]
+# IMPORTANTE: este POST cria pedidos e desconta estoque. Executar duas vezes
+# cria novas compras; os IDs, datas e estoques mudam.
+# Erros observados:
+# HTTP 400 "Informe clienteId e itens" (ausencia ou lista vazia).
+# HTTP 400 "Produto e quantidade obrigatorios" (quantidade <= 0).
+# HTTP 400 "Usuario nao e cliente" (perfil invalido).
+# HTTP 404 "Cliente nao encontrado".
+# HTTP 404 "Produto nao encontrado".
+# HTTP 409 "Produto inativo ou estoque insuficiente".
+POST {{baseUrl}}/compras
+Content-Type: application/json
+
+{
+  "clienteId": 4,
+  "itens": [
+    {
+      "produtoId": 1,
+      "quantidade": 1
+    },
+    {
+      "produtoId": 3,
+      "quantidade": 1
+    }
+  ]
+}
+
+
+### 11. Listar todos os pedidos (READ)
+# Descricao: retorna todos os pedidos quando nenhum filtro e informado.
+# Metodo e URL: GET {{baseUrl}}/pedidos
+# Exemplo observado: HTTP 200 OK, array de PedidoResponse.
+# Resumo de um retorno real dos testes:
+# [
+#   {"id":1,"clienteId":4,"lojistaId":2,"total":249.70,"status":"CONCLUIDO","itens":[...]},
+#   {"id":2,"clienteId":4,"lojistaId":2,"total":249.70,"status":"CANCELADO","itens":[...]},
+#   {"id":3,"clienteId":4,"lojistaId":2,"total":59.90,"status":"PENDENTE","itens":[...]},
+#   {"id":4,"clienteId":4,"lojistaId":3,"total":79.90,"status":"PENDENTE","itens":[...]}
+# ]
+# Os objetos reais tambem incluem "criadoEm" e detalhes completos de "itens".
+GET {{baseUrl}}/pedidos
+
+
+### 12. Listar pedidos por cliente (READ)
+# Descricao: filtra pedidos pelo clienteId informado.
+# Metodo e URL: GET {{baseUrl}}/pedidos?clienteId={{clienteId}}
+# Exemplo observado: HTTP 200 OK; pedidos 1, 2, 3 e 4 do cliente 4.
+# Para um cliente sem pedidos, foi observado HTTP 200 OK com [].
+GET {{baseUrl}}/pedidos?clienteId={{clienteId}}
+
+
+### 13. Listar pedidos por lojista (READ)
+# Descricao: filtra pedidos pelo lojistaId informado.
+# Metodo e URL: GET {{baseUrl}}/pedidos?lojistaId={{lojistaId}}
+# Exemplo observado para lojistaId=2: HTTP 200 OK; pedidos 1, 2 e 3
+# no estado posterior a compra com duas lojas.
+# Nao foi exigido combinar filtros clienteId e lojistaId simultaneamente.
+GET {{baseUrl}}/pedidos?lojistaId={{lojistaId}}
+
+
+### 14. Consultar pedido por ID (READ)
+# Descricao: recupera um pedido com seus itens, total e status.
+# Metodo e URL: GET {{baseUrl}}/pedidos/{{pedidoId}}
+# Exemplo observado: HTTP 200 OK
+# {
+#   "id": 1,
+#   "clienteId": 4,
+#   "lojistaId": 2,
+#   "criadoEm": "2026-11-22T21:40:28.695166Z",
+#   "total": 249.70,
+#   "status": "CONCLUIDO",
+#   "itens": [
+#     {"produtoId":1,"nomeProduto":"Camiseta","quantidade":2,"precoUnitario":59.90},
+#     {"produtoId":2,"nomeProduto":"Mochila","quantidade":1,"precoUnitario":129.90}
+#   ]
+# }
+# ID inexistente: HTTP 404 Not Found, "Pedido nao encontrado".
+GET {{baseUrl}}/pedidos/{{pedidoId}}
+
+
+### 15. Concluir pedido (UPDATE parcial)
+# Descricao: muda PENDENTE para CONCLUIDO; nao deve descontar estoque de novo.
+# ATENCAO: @pedidoId = 1 ja estava CONCLUIDO nos testes.
+# Para testar sucesso, defina @pedidoId com ID de pedido PENDENTE.
+# Metodo e URL: PATCH {{baseUrl}}/pedidos/{{pedidoId}}/concluir
+# Exemplo de sucesso observado: HTTP 200 OK, PedidoResponse com status CONCLUIDO.
+# Tentativa em pedido nao PENDENTE: HTTP 409 Conflict,
+# "Pedido nao esta pendente".
+PATCH {{baseUrl}}/pedidos/{{pedidoId}}/concluir
+
+
+### 16. Cancelar pedido (UPDATE parcial)
+# Descricao: muda PENDENTE para CANCELADO e repoem o estoque uma unica vez.
+# ATENCAO: @pedidoId = 1 ja estava CONCLUIDO nos testes.
+# Para testar sucesso, defina @pedidoId com ID de pedido PENDENTE.
+# Metodo e URL: PATCH {{baseUrl}}/pedidos/{{pedidoId}}/cancelar
+# Exemplo de sucesso observado: HTTP 200 OK, PedidoResponse com status CANCELADO.
+# Tentativa em pedido nao PENDENTE: HTTP 409 Conflict,
+# "Pedido nao esta pendente".
+PATCH {{baseUrl}}/pedidos/{{pedidoId}}/cancelar
+
+
+### ==========================================================
+### OBSERVACOES FINAIS
+### ==========================================================
+# 1. Nao existe rota DELETE de pedidos nem PUT de pedidos no controller
+#    apresentado. O fluxo usa PATCH para concluir e cancelar.
+# 2. Respostas em comentarios mostram exemplos de testes anteriores;
+#    a resposta real pode mudar conforme os dados atuais do H2.
+# 3. Os campos de login nao constituem autenticao/autorizacao real.
+# 4. Nao execute PATCH/DELETE usando IDs de dados que deseja preservar.
+# 5. Base documental: ProdutoController, PedidoController, PedidoRequest,
+#    ItemCompraRequest, ProdutoRepository e retornos fornecidos nos testes.
